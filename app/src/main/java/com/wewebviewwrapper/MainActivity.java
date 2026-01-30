@@ -20,6 +20,7 @@ import android.webkit.ServiceWorkerClient;
 import android.webkit.ServiceWorkerController;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
@@ -30,6 +31,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
@@ -95,6 +97,7 @@ public class MainActivity extends AppCompatActivity {
 
         initViews();
         setupWebView();
+        setupBackPressed();
         
         // Enable remote debugging for WebView
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
@@ -156,8 +159,10 @@ public class MainActivity extends AppCompatActivity {
             }
 
             @Override
-            public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
-                logError("WebView Error [" + errorCode + "]: " + description + " (at " + failingUrl + ")");
+            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                if (request.isForMainFrame()) {
+                    logError("WebView Error [" + error.getErrorCode() + "]: " + error.getDescription() + " (at " + request.getUrl() + ")");
+                }
             }
         });
 
@@ -287,21 +292,23 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    @Override
-    public void onBackPressed() {
-        if (logContainer.getVisibility() == View.VISIBLE) {
-            logContainer.setVisibility(View.GONE);
-            return;
-        }
-        if (customView != null) {
-            exitFullscreen();
-            return;
-        }
-        if (webView.canGoBack()) {
-            webView.goBack();
-        } else {
-            super.onBackPressed();
-        }
+    private void setupBackPressed() {
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                if (logContainer.getVisibility() == View.VISIBLE) {
+                    logContainer.setVisibility(View.GONE);
+                } else if (customView != null) {
+                    exitFullscreen();
+                } else if (webView.canGoBack()) {
+                    webView.goBack();
+                } else {
+                    setEnabled(false);
+                    getOnBackPressedDispatcher().onBackPressed();
+                    setEnabled(true);
+                }
+            }
+        });
     }
 
     private static class AssetResourceLoader {
