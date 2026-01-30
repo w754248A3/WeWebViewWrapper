@@ -96,6 +96,11 @@ public class MainActivity extends AppCompatActivity {
         initViews();
         setupWebView();
         
+        // Enable remote debugging for WebView
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+            WebView.setWebContentsDebuggingEnabled(true);
+        }
+        
         webView.loadUrl("https://mypage.test/index.html");
     }
 
