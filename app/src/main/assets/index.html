@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>自定义公式计算器</title>
+    <style>
+        /* CSS Reset & 基础样式 */
+        * { box-sizing: border-box; }
+        body, html { margin: 0; padding: 0; height: 100%; font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f4f4; }
+        
+        /* 主容器 */
+        .app-container {
+            width: 900px;
+            height: 95vh;
+            margin: 2.5vh auto;
+            background: white;
+            border: 2px solid #000;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+
+        /* 通用盒子样式 - 对应图中各区块 */
+        .section-box {
+            border: 2px solid #000;
+            margin-bottom: 15px;
+            padding: 10px;
+            font-size: 16px;
+        }
+
+        /* A部分: 选择框 */
+        #section-a select {
+            width: 100%;
+            font-size: 18px;
+            padding: 5px;
+            border: none;
+            outline: none;
+            background: transparent;
+            cursor: pointer;
+        }
+
+        /* B部分: 公式显示 */
+        #section-b {
+            background-color: #eee;
+            min-height: 40px;
+            word-break: break-all;
+            color: #333;
+            font-family: monospace;
+        }
+        #section-b.error { color: red; }
+
+        /* 中间滚动区域 (C & D) */
+        #variable-scroll-area {
+            flex: 1; /* 占据剩余空间 */
+            overflow-y: auto; /* 允许垂直滚动 */
+            border: 1px dashed #ccc; /* 辅助视觉边框，表示这是滚动区 */
+            padding: 10px;
+            margin-bottom: 15px;
+        }
+
+        /* 变量行结构 */
+        .variable-row {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 15px;
+        }
+
+        /* C部分: 变量名 */
+        .var-label {
+            border: 2px solid #000;
+            width: 200px;
+            padding: 8px;
+            margin-right: 20px;
+            text-align: center;
+            background: #fff;
+            flex-shrink: 0;
+            font-weight: bold;
+        }
+
+        /* D部分: 输入框容器 */
+        .input-group-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        /* 表达式输入框 */
+        .expr-input {
+            width: 250px;
+            height: 40px;
+            border: 2px solid #000;
+            padding: 5px 10px;
+            font-size: 18px;
+            font-family: monospace;
+            outline: none;
+        }
+
+        /* 表达式结果显示 */
+        .expr-result-box {
+            font-size: 18px;
+            font-weight: bold;
+            color: #2c3e50;
+            min-width: 100px;
+        }
+
+        .expr-error {
+            color: #e74c3c;
+            font-size: 14px;
+            font-weight: normal;
+        }
+
+        /* 底部区域 (E, F, G) */
+        #bottom-area {
+            flex-shrink: 0; /* 不允许压缩 */
+        }
+
+        /* E部分: 代入后的公式 */
+        #section-e {
+            min-height: 40px;
+            background-color: #f9f9f9;
+            color: #555;
+            word-break: break-all;
+        }
+
+        /* F & G 容器 */
+        .result-action-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* F部分: 结果 */
+        #section-f {
+            width: 45%;
+            border: 2px solid #000;
+            padding: 10px;
+            font-size: 20px;
+            font-weight: bold;
+            text-align: center;
+            min-height: 50px;
+            line-height: 30px;
+        }
+
+        /* G部分: 按钮 */
+        #section-g {
+            width: 30%;
+            padding: 0;
+            border: none;
+        }
+        #section-g button {
+            width: 100%;
+            height: 54px; /* 匹配 F 的高度 */
+            border: 2px solid #000;
+            background: #fff;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        #section-g button:hover {
+            background: #ddd;
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <!-- A部分: 顶部选择框 -->
+    <div class="section-box" id="section-a">
+        <select id="formula-select">
+            <option value="" disabled selected>-- 请选择公式 --</option>
+            <!-- 选项将由JS动态生成 -->
+        </select>
+    </div>
+
+    <!-- B部分: 原始公式显示 -->
+    <div class="section-box" id="section-b">
+        等待选择公式...
+    </div>
+
+    <!-- C & D部分: 可滚动的变量输入区 -->
+    <div id="variable-scroll-area">
+        <!-- 动态生成的内容示例如下:
+        <div class="variable-row">
+            <div class="var-label">单价</div> (C)
+            <div class="input-group-container"> (D)
+                <div class="input-wrapper"><input type="number"><span class="x">x</span></div>
+            </div>
+        </div>
+        -->
+    </div>
+
+    <!-- 底部固定区域 -->
+    <div id="bottom-area">
+        <!-- E部分: 代入数字后的公式 -->
+        <div class="section-box" id="section-e">
+            (代入数值后的公式将显示在这里)
+        </div>
+
+        <div class="result-action-row">
+            <!-- F部分: 结果显示 -->
+            <div id="section-f">0</div>
+            
+            <!-- G部分: 确认按钮 -->
+            <div id="section-g">
+                <button id="calc-btn">确认计算</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 1. 数据定义 (硬编码)
+    let formulas = {
+        "公式1 (收支计算)": "(本月收入 - 本月电费- 本月水费 - 本月礼钱 + 固定额外收入)- (上月收入- 上月电费- 上月水费 - 上月礼钱+固定额外收入)",
+        "公式2 (损坏率计算)": "(单价*总数量)*(损坏的数量/ 总数量)",
+        "测试公式3 (多值测试)": "(A + B) * (A - C)"
+    };
+
+    // DOM 元素引用
+    const selectEl = document.getElementById('formula-select');
+    const formulaDisplayEl = document.getElementById('section-b');
+    const scrollAreaEl = document.getElementById('variable-scroll-area');
+    const substitutedDisplayEl = document.getElementById('section-e');
+    const resultDisplayEl = document.getElementById('section-f');
+    const calcBtn = document.getElementById('calc-btn');
+
+    // 当前状态
+    let currentFormulaRaw = "";
+    let currentVariables = []; // 存储解析出的变量名列表
+
+    // 2. 初始化
+    function init() {
+        // 填充选择框
+        for (let name in formulas) {
+            let option = document.createElement('option');
+            option.value = name;
+            option.textContent = name;
+            selectEl.appendChild(option);
+        }
+
+        // 监听选择变化
+        selectEl.addEventListener('change', handleFormulaChange);
+        
+        // 监听计算按钮
+        calcBtn.addEventListener('click', performCalculation);
+    }
+
+    // 3. 处理公式选择变化
+    function handleFormulaChange(e) {
+        const formulaName = e.target.value;
+        currentFormulaRaw = formulas[formulaName];
+        
+        // 显示 B 部分
+        formulaDisplayEl.textContent = currentFormulaRaw;
+        formulaDisplayEl.classList.remove('error');
+
+        // 解析公式提取变量
+        const vars = parseVariables(currentFormulaRaw);
+        
+        if (vars.error) {
+            formulaDisplayEl.textContent = "公式错误: " + vars.msg;
+            formulaDisplayEl.classList.add('error');
+            scrollAreaEl.innerHTML = '';
+            currentVariables = [];
+            return;
+        }
+
+        currentVariables = vars.data;
+        // 渲染 C & D 部分
+        renderVariableInputs(currentVariables);
+        
+        // 重置底部
+        substitutedDisplayEl.textContent = "(代入数值后的公式将显示在这里)";
+        resultDisplayEl.textContent = "0";
+    }
+
+    // 4. 解析公式逻辑
+    function parseVariables(formulaStr) {
+        // 规则：只允许 加减乘除、括号、中文、英文、空格
+        // 第一步：简单验证字符合法性 (允许 空格 中文 英文 数字 + - * / ( ) )
+        // 注意：虽然代数名称不建议有数字，但为了兼容性，只要不是纯数字即可
+        
+        // 核心思路：利用分隔符将字符串打散。分隔符为运算符和括号
+        // 正则：匹配 + - * / ( )
+        const tokens = formulaStr.split(/([+\-*/()])/);
+        
+        const variableSet = new Set();
+        
+        for (let token of tokens) {
+            let t = token.trim();
+            if (!t) continue; // 跳过空
+            if (['+', '-', '*', '/', '(', ')'].includes(t)) continue; // 跳过符号
+            
+            // 剩下的应该是变量名
+            // 简单的校验：变量名不能包含非法字符
+            
+            variableSet.add(t);
+        }
+        
+        return { error: false, data: Array.from(variableSet) };
+    }
+
+    // 5. 渲染输入区域 (C & D)
+    function renderVariableInputs(variables) {
+        scrollAreaEl.innerHTML = ''; // 清空
+
+        variables.forEach(varName => {
+            const row = document.createElement('div');
+            row.className = 'variable-row';
+
+            // C部分: Label
+            const label = document.createElement('div');
+            label.className = 'var-label';
+            label.textContent = varName + ":";
+            
+            // D部分: 输入框容器
+            const inputContainer = document.createElement('div');
+            inputContainer.className = 'input-group-container';
+            inputContainer.dataset.varName = varName;
+
+            // 创建表达式输入框
+            const input = document.createElement('input');
+            input.type = "text";
+            input.className = "expr-input";
+            input.placeholder = "输入表达式, 如 8*4";
+            
+            // 结果显示区域
+            const resultBox = document.createElement('div');
+            resultBox.className = 'expr-result-box';
+            resultBox.textContent = "";
+
+            // 监听输入事件
+            input.addEventListener('input', () => {
+                handleExpressionInput(input, resultBox);
+            });
+
+            inputContainer.appendChild(input);
+            inputContainer.appendChild(resultBox);
+
+            row.appendChild(label);
+            row.appendChild(inputContainer);
+            scrollAreaEl.appendChild(row);
+        });
+    }
+
+    // 6. 表达式计算逻辑
+    function handleExpressionInput(inputEl, resultBoxEl) {
+        const expr = inputEl.value.trim();
+        if (!expr) {
+            resultBoxEl.textContent = "";
+            resultBoxEl.classList.remove('expr-error');
+            inputEl.dataset.calculatedValue = "0";
+            return;
+        }
+
+        // 安全性检查：只允许 数字 . + - * / ( )
+        // 允许空格
+        const safeExpr = expr.replace(/\s+/g, '');
+        if (!/^[0-9.+\-*/()]+$/.test(safeExpr)) {
+            resultBoxEl.textContent = "格式错误";
+            resultBoxEl.classList.add('expr-error');
+            inputEl.dataset.calculatedValue = "NaN";
+            return;
+        }
+
+        try {
+            // 使用 new Function 计算
+            const res = new Function('return ' + safeExpr)();
+            
+            if (typeof res === 'number' && !isNaN(res) && isFinite(res)) {
+                let displayRes = res;
+                if (!Number.isInteger(res)) {
+                    displayRes = parseFloat(res.toFixed(4));
+                }
+                resultBoxEl.textContent = "= " + displayRes;
+                resultBoxEl.classList.remove('expr-error');
+                inputEl.dataset.calculatedValue = res.toString();
+            } else {
+                resultBoxEl.textContent = "错误";
+                resultBoxEl.classList.add('expr-error');
+                inputEl.dataset.calculatedValue = "NaN";
+            }
+        } catch (e) {
+            resultBoxEl.textContent = "语法错误";
+            resultBoxEl.classList.add('expr-error');
+            inputEl.dataset.calculatedValue = "NaN";
+        }
+    }
+
+    // 7. 核心计算逻辑
+    function performCalculation() {
+        if (!currentFormulaRaw || currentVariables.length === 0) return;
+
+        // 1. 获取所有变量的值
+        const varValues = {};
+        const rows = scrollAreaEl.querySelectorAll('.variable-row');
+        let hasError = false;
+        
+        rows.forEach(row => {
+            const inputContainer = row.querySelector('.input-group-container');
+            const varName = inputContainer.dataset.varName;
+            const input = inputContainer.querySelector('input');
+            
+            // 如果输入框为空，默认为 0
+            if (!input.value.trim()) {
+                varValues[varName] = 0;
+                return;
+            }
+
+            const val = parseFloat(input.dataset.calculatedValue);
+            if (isNaN(val)) {
+                hasError = true;
+            } else {
+                varValues[varName] = val;
+            }
+        });
+
+        if (hasError) {
+            resultDisplayEl.textContent = "输入有误";
+            substitutedDisplayEl.textContent = "请检查变量输入中的表达式错误";
+            return;
+        }
+
+        // 2. 代入公式 (E部分)
+        // 必须通过 Token 拆分来替换，否则 "Total" 会匹配并替换掉 "TotalCost" 中的前缀
+        const tokens = currentFormulaRaw.split(/([+\-*/()])/);
+        let substitutedFormula = "";
+        let calcFormula = ""; // 用于eval的字符串
+
+        tokens.forEach(token => {
+            let t = token.trim();
+            if (!t) return; 
+
+            if (['+', '-', '*', '/', '(', ')'].includes(t)) {
+                substitutedFormula += t + " "; // 加个空格美观
+                calcFormula += t;
+            } else {
+                // 是变量
+                if (varValues.hasOwnProperty(t)) {
+                    const val = varValues[t];
+                    // 负数最好加个括号保护，不过这里输入大多是正数
+                    // 如果值是负数，显示时看起来像 ( -5 )
+                    substitutedFormula += val + " ";
+                    calcFormula += `(${val})`; // 安全起见包一层括号
+                } else {
+                    // 未知Token（理论上不会走到这）
+                    substitutedFormula += t + " ";
+                    calcFormula += "0";
+                }
+            }
+        });
+
+        substitutedDisplayEl.textContent = substitutedFormula;
+
+        // 3. 计算结果 (F部分)
+        try {
+            // 使用 new Function 比 eval 稍微好一点，但原理类似
+            // 仅允许基本数学运算，风险可控
+            const result = new Function('return ' + calcFormula)();
+            
+            // 格式化结果
+            let finalRes = result;
+            if (!Number.isInteger(finalRes)) {
+                finalRes = parseFloat(finalRes.toFixed(4)); // 保留4位小数
+            }
+            
+            resultDisplayEl.textContent = finalRes;
+        } catch (e) {
+            resultDisplayEl.textContent = "计算错误";
+            console.error(e);
+        }
+    }
+
+    (async function(){
+
+        const res = await fetch("/data/data.json");
+
+        formulas = await res.json();
+
+        init();
+    })();
+
+</script>
+
+</body>
+</html>
