@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>屏幕检测工具</title>
+<style>
+  body, html {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+  }
+  #color-changer {
+    height: 100%;
+    width: 100%;
+    cursor: pointer;
+  }
+</style>
+<script>
+  const colors = ["white", "red", "green", "blue", "yellow"];
+  let currentColorIndex = 0;
+
+  document.addEventListener('DOMContentLoaded', (event) => {
+    const colorChanger = document.getElementById('color-changer');
+
+    colorChanger.addEventListener('click', function() {
+      currentColorIndex = (currentColorIndex + 1) % colors.length;
+      document.body.style.backgroundColor = colors[currentColorIndex];
+    });
+
+    // 为移动端触摸事件添加监听器
+    colorChanger.addEventListener('touchend', function(e) {
+      e.preventDefault(); // 防止触摸事件的默认行为
+      currentColorIndex = (currentColorIndex + 1) % colors.length;
+      document.body.style.backgroundColor = colors[currentColorIndex];
+    });
+  });
+</script>
+</head>
+<body>
+<div id="color-changer"></div>
+</body>
+</html>

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文件按位取反混淆器 (Stream版)</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            max-width: 600px;
+            margin: 40px auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        h1 {
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 10px;
+        }
+
+        .card {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 8px;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        #status {
+            margin-top: 20px;
+            font-weight: bold;
+            color: #333;
+            white-space: pre-wrap;
+        }
+
+        .error {
+            color: #d9534f;
+        }
+
+        .success {
+            color: #28a745;
+        }
+
+        .info {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>文件混淆器 (按位取反)</h1>
+
+    <div class="card">
+        <p>选择一个文件，程序将流式读取并对所有字节进行按位取反，然后保存为新文件。</p>
+        <p class="info">再次处理混淆后的文件即可还原。</p>
+        <button id="processBtn">选择文件并开始处理</button>
+        <div id="status"></div>
+    </div>
+    <script src="./file_obfuscator.js"></script>
+
+</body>
+
+</html>

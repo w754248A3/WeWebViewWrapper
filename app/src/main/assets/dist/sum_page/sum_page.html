@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-cn" dir="ltr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>计算和</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        #list {
+            width: 80%;
+            height: 50vh;
+            border: 1px solid black;
+            overflow: auto;
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column-reverse;
+            align-items: center;
+            justify-content: flex-start;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+
+        #input,
+        #sum,
+        #delete,
+        #speak_button,
+        #voiceSelect {
+            width: 80%;
+            height: 30px;
+            margin: 10px;
+        }
+
+        #delete,
+        #speak_button {
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="list"></div>
+    <button id="delete">删除</button>
+    <input id="sum" readonly>
+    <input id="input" type="number" placeholder="输入数字并按回车">
+    <button id="speak_button">朗读</button>
+    <select id="voiceSelect"></select>
+    <script>
+        let list = [];
+        let sum = 0;
+        const listDiv = document.getElementById('list');
+        const input = document.getElementById('input');
+        const sumInput = document.getElementById('sum');
+        const deleteButton = document.getElementById('delete');
+        const spk = window.speechSynthesis;
+        const speak_button = document.getElementById('speak_button');
+        const voiceSelect = document.getElementById('voiceSelect');
+
+        const v使用合成语音 = "使用合成语音";
+        const v使用预置语音 = "使用预置语音";
+
+        //const audioPlayer = new Audio(`data:audio/mp3;base64,${audioFiles[key]}`);
+        function populateVoiceList(text) {
+
+
+            let selectedIndex = 0;
+
+            const option = document.createElement("option");
+            option.textContent = text;
+
+            voiceSelect.appendChild(option);
+            voiceSelect.selectedIndex = selectedIndex;
+        }
+
+        populateVoiceList(v使用合成语音);
+
+
+        function is使用合成语音() {
+
+
+            const text =
+                voiceSelect.selectedOptions[0].textContent;
+
+
+            return text === v使用合成语音;
+        }
+
+        function f朗读_使用合成语音(text, rete) {
+
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'zh-CN';
+            utterance.rate = rete || 10;
+
+            spk.cancel();
+            spk.speak(utterance);
+
+        }
+
+        function f朗读字符(text) {
+
+            if (is使用合成语音()) {
+                f朗读_使用合成语音(text);
+            }
+            else {
+                f朗读_使用预置语音(text);
+            }
+        }
+
+        input.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                const value = parseInt(this.value);
+                if (!isNaN(value)) {
+                    list.push(value);
+                    sum += value;
+                    this.value = '';
+                    updateUI();
+
+                    f朗读字符("加");
+                }
+            }
+        });
+
+        deleteButton.addEventListener('click', function () {
+            if (list.length > 0) {
+                sum -= list.pop();
+                updateUI();
+            }
+        });
+
+        function updateUI() {
+            listDiv.innerHTML = list.map((value, index) => `${index + 1}. ${value}`).join('<br>');
+            sumInput.value = sum;
+            deleteButton.disabled = list.length === 0;
+        }
+
+        updateUI();
+
+        speak_button.addEventListener('click', function () {
+            if (list.length > 0) {
+
+                const text = list.join(",+,") + ",=," + sumInput.value;
+
+                f朗读_使用合成语音(text, 0.5);
+
+            }
+        });
+
+
+        (function () {
+
+
+            const spk = window.speechSynthesis;
+
+
+            input.addEventListener('keydown', function (e) {
+                const v = e.key;
+                if (/^[0-9]$/.test(v)) {
+                    f朗读字符(v);
+                }
+            });
+        })();
+
+
+        const f朗读_使用预置语音 = create可以使用固定语音播放的方法();
+        function create可以使用固定语音播放的方法() {
+            let func = null;
+            // 定义获取JSON文件的函数
+            function fetchJSON(jsonPath) {
+                // 使用fetch API发起请求
+                fetch(jsonPath)
+                    .then(response => {
+                        // 检查响应状态码，如果成功则返回响应体，否则抛出错误
+                        if (response.ok) {
+                            return response.json(); // 解析JSON数据
+                        } else {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                    })
+                    .then(data => {
+                        // 打印获取到的JSON数据到控制台
+                        console.log(data);
+
+                        f构造音频数据(data);
+                    })
+                    .catch(error => {
+                        // 打印错误信息到控制台
+                        console.log('Failed to fetch JSON:', error);
+                    });
+            }
+
+            function f构造音频数据(data) {
+                //const audioPlayer = new Audio(`data:audio/mp3;base64,${data[key]}`);
+                func = create使用音频上下文播放音频的函数(data);
+                populateVoiceList(v使用预置语音);
+
+            }
+
+            // 调用函数获取data.json文件
+            fetchJSON('./fileData.json');
+
+            return (key) => {
+
+
+                if (func) {
+                    func(key);
+                }
+
+            }
+        }
+
+        function create使用音频上下文播放音频的函数(data) {
+            const map = new Map();
+
+            // 创建一个新的音频上下文
+            let audioContext = null;
+
+            // 将Base64字符串转换为ArrayBuffer
+            function base64ToArrayBuffer(base64) {
+                const binaryString = window.atob(base64);
+                const length = binaryString.length;
+                const bytes = new Uint8Array(length);
+                for (let i = 0; i < length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                return bytes.buffer;
+            }
+
+            // 解码ArrayBuffer为AudioBuffer
+            function decodeArrayBuffer(arrayBuffer) {
+                return audioContext.decodeAudioData(arrayBuffer);
+            }
+
+            // 播放音频
+            function playAudio(audioBuffer) {
+                // 创建一个音频源
+                const source = audioContext.createBufferSource();
+                source.buffer = audioBuffer;
+                source.connect(audioContext.destination);
+
+
+                source.start();
+            }
+
+
+            return (text) => {
+
+
+                if (audioContext === null) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+                }
+
+
+
+
+
+
+                if (map.has(text)) {
+                    playAudio(map.get(text));
+                }
+                else {
+                    const arrayBuffer = base64ToArrayBuffer(data[text]);
+
+                    decodeArrayBuffer(arrayBuffer).then(audioBuffer => {
+                        playAudio(audioBuffer)
+                        if (!map.has(text)) {
+                            map.set(text, audioBuffer);
+                        }
+
+
+
+                    }).catch(error => {
+                        console.error('音频解码失败:', error);
+                    });
+                }
+            }
+        }
+
+    </script>
+</body>
+
+</html>

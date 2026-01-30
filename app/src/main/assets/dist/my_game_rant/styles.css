@@ -1,0 +1,77 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    line-height: 1.6;
+    padding: 20px;
+    background-color: #f9f9f9;
+    color: #333;
+}
+
+.container {
+    max-width: 600px;
+    margin: 0 auto;
+    background: #fff;
+    padding: 20px;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+h1 {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.article {
+    margin-bottom: 20px;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 10px;
+}
+
+.article-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+}
+
+.article-header h2 {
+    font-size: 18px;
+    margin-bottom: 5px;
+}
+
+.article-header p {
+    font-size: 12px;
+    color: #999;
+}
+
+.article-content {
+    font-size: 14px;
+    margin-top: 10px;
+    margin-bottom: 5px;
+    white-space: pre-wrap; /* 保证内容换行 */
+    overflow: hidden;
+    transition: max-height 0.3s ease, padding 0.3s ease;
+    max-height: 2em; /* 设置初始最大高度，只显示一行内容 */
+}
+
+.article-content.expanded {
+    max-height: none; /* 展开后取消高度限制 */
+    overflow: visible;
+}
+
+button.toggle-content {
+    font-size: 12px;
+    color: #007bff;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 5px 0;
+}
+
+button.toggle-content:hover {
+    text-decoration: underline;
+}

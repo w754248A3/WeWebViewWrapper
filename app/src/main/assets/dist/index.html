@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN" dir="ltr">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+
+  <link rel="manifest" href="./manifest.json">
+  <style>
+    .box {
+      width: 200px;
+      height: 200px;
+      margin: 10px;
+      border: 1px solid black;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .container {
+      display: flex;
+      flex-wrap: wrap;
+    }
+
+    img {
+      max-width: 80%;
+      max-height: 50%;
+      object-fit: contain;
+    }
+
+    p,
+    a {
+      font-size: 14px;
+      text-align: center;
+      width: 80%;
+    }
+  </style>
+  <title>工具</title>
+</head>
+
+<body>
+  <div class="container">
+    <div class="box">
+      <img src="../icon512.png" alt="Image description">
+      <p>生成密码</p>
+      <a href="./gen_password/gen_password.html">点击这里</a>
+    </div>
+    <div class="box">
+      <img src="../icon512.png" alt="Image description">
+      <p>根据关键词生成密码</p>
+      <a href="./password_generator/password_generator.html">点击这里</a>
+    </div>
+    <div class="box">
+      <img src="../icon512.png" alt="Image description">
+      <p>文件混淆器</p>
+      <a href="./file_obfuscator/file_obfuscator.html">点击这里</a>
+    </div>
+    <div class="box">
+      <img src="../icon512.png" alt="Image description">
+      <p>流式解密播放器</p>
+      <a href="./streaming_decryption_player/streaming_decryption_player.html">点击这里</a>
+    </div>
+    <div class="box">
+      <img src="../icon512.png" alt="Image description">
+      <p>计算和</p>
+      <a href="./sum_page/sum_page.html">点击这里</a>
+    </div>
+    <div class="box">
+      <img src="../icon512.png" alt="Image description">
+      <p>文本编辑</p>
+      <a href="./text_editor/text_editor.html">点击这里</a>
+    </div>
+    <div class="box">
+      <img src="../icon512.png" alt="Image description">
+      <p>屏幕检测</p>
+      <a href="./screen_detection/screen_detection.html">点击这里</a>
+    </div>
+    <div class="box">
+      <img src="../icon512.png" alt="Image description">
+      <p>生成测试用tls证书</p>
+      <a href="./generate_test_tls_certificate/generate_test_tls_certificate.html">点击这里</a>
+    </div>
+    <div class="box">
+      <img src="../icon512.png" alt="Image description">
+      <p>屏幕录制</p>
+      <a href="screen_recording/screen_recording.html">点击这里</a>
+    </div>
+    <div class="box">
+      <img src="../icon512.png" alt="Image description">
+      <p>反色</p>
+      <a href="invert_colors/invert_colors.html">点击这里</a>
+    </div>
+    <div class="box">
+      <img src="../icon512.png" alt="Image description">
+      <p>测试页面</p>
+      <a href="./test_page/test_page.html">点击这里</a>
+    </div>
+    <div class="box">
+      <img src="../icon512.png" alt="Image description">
+      <p>测试键盘事件</p>
+      <a href="./test_event/test_event.html">点击这里</a>
+    </div>
+    <div class="box">
+      <img src="../icon512.png" alt="Image description">
+      <p>文章</p>
+      <a href="./my_game_rant/index.html">点击这里</a>
+    </div>
+    <!-- 可以复制以上的 div.box 来添加更多的方块 -->
+  </div>
+  <script src="./main.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js', { scope: './' });
+    }
+  </script>
+
+</body>
+
+</html>

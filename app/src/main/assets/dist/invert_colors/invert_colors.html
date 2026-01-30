@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>反色</title>
+<style>
+  body {
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    flex-direction: column;
+  }
+
+  video {
+    width: 80%;
+    max-width: 600px;
+    margin-bottom: 20px;
+  }
+
+  button {
+    padding: 10px 20px;
+    font-size: 18px;
+  }
+</style>
+</head>
+<body>
+
+<video id="video_1" controls></video>
+
+<video id="video_2" controls></video>
+
+<button id="startRecording">播放/暂停所有视频</button>
+
+<script src="invert_colors.js"></script>
+</body>
+</html>

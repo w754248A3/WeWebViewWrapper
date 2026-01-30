@@ -91,7 +91,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         originalOrientation = getRequestedOrientation();
-        assetLoader = new AssetResourceLoader(this, "mypage.test", ""); // No subfolder in assets
+        assetLoader = new AssetResourceLoader(this, "mypage.test", "dist"); 
 
         initViews();
         setupWebView();

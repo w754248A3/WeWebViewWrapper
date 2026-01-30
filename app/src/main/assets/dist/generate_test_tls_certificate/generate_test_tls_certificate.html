@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>生成测试用tls证书</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    flex-direction: column;
+  }
+  #textArea {
+    width: 80%;
+    height: 100px;
+    margin-bottom: 10px;
+  }
+  #button {
+    display: block;
+    width: 80%;
+    padding: 10px;
+    margin-bottom: 20px;
+  }
+  #linkList {
+    list-style-type: none;
+    padding: 0;
+    width: 80%;
+  }
+  #linkList li {
+    margin-bottom: 5px;
+  }
+</style>
+</head>
+<body>
+
+<textarea id="textArea" placeholder="在此每一行中输入一个DNS"></textarea>
+<button id="button">在主线程中生成证书</button>
+<ul id="linkList"></ul>
+
+<script src="generate_test_tls_certificate.js"></script>
+</body>
+</html>

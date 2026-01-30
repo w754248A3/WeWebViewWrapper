@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>屏幕录制应用</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background-color: #f0f0f0;
+    }
+
+    #videoPlayer {
+      width: 90%;
+      max-width: 600px;
+      margin-bottom: 20px;
+    }
+
+    button {
+      padding: 10px 20px;
+      margin: 5px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+
+<body>
+  <video id="videoPlayer" autoplay muted></video>
+  <button id="startRecording">开始录制</button>
+  <button id="stopRecording" disabled>结束录制</button>
+
+
+  <script src="screen_recording.js"></script>
+</body>
+
+</html>
