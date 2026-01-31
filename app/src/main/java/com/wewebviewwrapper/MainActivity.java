@@ -35,6 +35,7 @@ import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.SwitchCompat;
 import androidx.documentfile.provider.DocumentFile;
 
 import java.io.ByteArrayInputStream;
@@ -57,6 +58,9 @@ public class MainActivity extends AppCompatActivity {
     private StringBuilder errorLogs = new StringBuilder();
     private TextView logTextView;
     private View logContainer;
+    private View settingsContainer;
+    private SwitchCompat switchDetailedLog;
+    private boolean isDetailedLogEnabled = false;
     private LinearLayout bottomToolbar;
     private AssetResourceLoader assetLoader;
 
@@ -85,6 +89,13 @@ public class MainActivity extends AppCompatActivity {
                             }
                         }
                     }
+                    
+                    if (results != null) {
+                        logInfo("File chooser result: SUCCESS, count=" + results.length);
+                    } else {
+                        logInfo("File chooser result: CANCELLED or EMPTY");
+                    }
+                    
                     mUploadCallback.onReceiveValue(results);
                     mUploadCallback = null;
                 }
@@ -100,30 +111,40 @@ public class MainActivity extends AppCompatActivity {
                 if (mUploadCallback != null) {
                     Uri[] results = null;
                     if (uri != null) {
-                        // 1. 获取持久化访问权限
-                        final int takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
-                        getContentResolver().takePersistableUriPermission(uri, takeFlags);
+                        logInfo("Directory chooser result: SUCCESS, uri=" + uri.toString());
+                        try {
+                            // 1. 获取持久化访问权限
+                            final int takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
+                            getContentResolver().takePersistableUriPermission(uri, takeFlags);
 
-                        // 2. 将授权的 URI 静默保存到本地配置中
-                        getSharedPreferences("storage_prefs", MODE_PRIVATE)
-                                .edit()
-                                .putString("last_authorized_dir", uri.toString())
-                                .apply();
+                            // 2. 将授权的 URI 静默保存到本地配置中
+                            getSharedPreferences("storage_prefs", MODE_PRIVATE)
+                                    .edit()
+                                    .putString("last_authorized_dir", uri.toString())
+                                    .apply();
 
-                        // 3. 遍历目录下的文件，返回给 WebView (模拟 webkitdirectory 行为)
-                        DocumentFile root = DocumentFile.fromTreeUri(this, uri);
-                        if (root != null && root.isDirectory()) {
-                            List<Uri> fileUris = new ArrayList<>();
-                            DocumentFile[] files = root.listFiles();
-                            if (files != null) {
-                                for (DocumentFile file : files) {
-                                    if (file.isFile()) fileUris.add(file.getUri());
+                            // 3. 遍历目录下的文件，返回给 WebView (模拟 webkitdirectory 行为)
+                            DocumentFile root = DocumentFile.fromTreeUri(this, uri);
+                            if (root != null && root.isDirectory()) {
+                                List<Uri> fileUris = new ArrayList<>();
+                                DocumentFile[] files = root.listFiles();
+                                if (files != null) {
+                                    for (DocumentFile file : files) {
+                                        if (file.isFile()) fileUris.add(file.getUri());
+                                    }
+                                }
+                                if (!fileUris.isEmpty()) {
+                                    results = fileUris.toArray(new Uri[0]);
+                                    logInfo("Directory traversal: SUCCESS, file count=" + results.length);
+                                } else {
+                                    logInfo("Directory traversal: EMPTY");
                                 }
                             }
-                            if (!fileUris.isEmpty()) {
-                                results = fileUris.toArray(new Uri[0]);
-                            }
+                        } catch (Exception e) {
+                            logError("Directory Chooser Processing Error: " + Log.getStackTraceString(e));
                         }
+                    } else {
+                        logInfo("Directory chooser result: CANCELLED");
                     }
                     mUploadCallback.onReceiveValue(results);
                     mUploadCallback = null;
@@ -206,6 +227,8 @@ public class MainActivity extends AppCompatActivity {
         bottomToolbar = findViewById(R.id.bottom_toolbar);
         logContainer = findViewById(R.id.log_container);
         logTextView = findViewById(R.id.log_text);
+        settingsContainer = findViewById(R.id.settings_container);
+        switchDetailedLog = findViewById(R.id.switch_detailed_log);
 
         findViewById(R.id.btn_back).setOnClickListener(v -> {
             if (webView.canGoBack()) webView.goBack();
@@ -219,9 +242,22 @@ public class MainActivity extends AppCompatActivity {
             if (webView.canGoForward()) webView.goForward();
         });
 
-        findViewById(R.id.btn_log).setOnClickListener(v -> {
+        findViewById(R.id.btn_settings).setOnClickListener(v -> {
+            settingsContainer.setVisibility(View.VISIBLE);
+        });
+
+        findViewById(R.id.btn_close_settings).setOnClickListener(v -> {
+            settingsContainer.setVisibility(View.GONE);
+        });
+
+        findViewById(R.id.btn_open_log_viewer).setOnClickListener(v -> {
             logContainer.setVisibility(View.VISIBLE);
             logTextView.setText(errorLogs.toString());
+        });
+
+        switchDetailedLog.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            isDetailedLogEnabled = isChecked;
+            logInfo("Detailed Log Mode: " + (isChecked ? "ON" : "OFF"));
         });
 
         findViewById(R.id.btn_close_log).setOnClickListener(v -> {
@@ -296,6 +332,9 @@ public class MainActivity extends AppCompatActivity {
                 if (mUploadCallback != null) mUploadCallback.onReceiveValue(null);
                 mUploadCallback = filePathCallback;
 
+                String acceptTypes = fileChooserParams.getAcceptTypes() != null ? Arrays.toString(fileChooserParams.getAcceptTypes()) : "none";
+                logInfo("onShowFileChooser triggered. Accept types: " + acceptTypes);
+
                 // 1. 检查是否为目录拾取请求 (通过 accept=".directory" 标识)
                 boolean isDirectoryPick = false;
                 if (fileChooserParams.getAcceptTypes() != null) {
@@ -316,9 +355,12 @@ public class MainActivity extends AppCompatActivity {
                     isSaveMode = (fileChooserParams.getMode() == 3);
                 }
 
+                logInfo("File picker mode: " + (isDirectoryPick ? "DIRECTORY" : (isSaveMode ? "SAVE" : "OPEN")));
+
                 try {
                     if (isDirectoryPick) {
                         // 启动目录选择器 (针对 showDirectoryPicker 的适配)
+                        logInfo("Launching directory chooser...");
                         directoryChooserLauncher.launch(null);
                     } else {
                         // 启动标准选择器 (支持 showOpenFilePicker 和 showSaveFilePicker)
@@ -327,14 +369,16 @@ public class MainActivity extends AppCompatActivity {
                         
                         // 如果是保存模式且有预设文件名，确保它被传递
                         if (isSaveMode && fileChooserParams.getFilenameHint() != null) {
+                            logInfo("Save mode with hint: " + fileChooserParams.getFilenameHint());
                             intent.putExtra(Intent.EXTRA_TITLE, fileChooserParams.getFilenameHint());
                         }
                         
+                        logInfo("Launching file chooser intent: " + intent.getAction());
                         fileChooserLauncher.launch(intent);
                     }
                 } catch (Exception e) {
                     mUploadCallback = null;
-                    logError("File Chooser Error: " + e.getMessage());
+                    logError("File Chooser Error: " + Log.getStackTraceString(e));
                     return false;
                 }
                 return true;
@@ -395,11 +439,22 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
+     * 记录普通信息日志（仅在详细日志模式开启时记录）。
+     */
+    private void logInfo(String message) {
+        if (isDetailedLogEnabled) {
+            String timestamp = new java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(new java.util.Date());
+            errorLogs.append("[").append(timestamp).append("] [INFO] ").append(message).append("\n\n");
+            Log.i(TAG, message);
+        }
+    }
+
+    /**
      * 记录错误日志并输出到控制台及调试面板。
      */
     private void logError(String message) {
         String timestamp = new java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(new java.util.Date());
-        errorLogs.append("[").append(timestamp).append("] ").append(message).append("\n\n");
+        errorLogs.append("[").append(timestamp).append("] [ERROR] ").append(message).append("\n\n");
         Log.e(TAG, message);
     }
 
@@ -468,6 +523,8 @@ public class MainActivity extends AppCompatActivity {
             public void handleOnBackPressed() {
                 if (logContainer.getVisibility() == View.VISIBLE) {
                     logContainer.setVisibility(View.GONE);
+                } else if (settingsContainer.getVisibility() == View.VISIBLE) {
+                    settingsContainer.setVisibility(View.GONE);
                 } else if (customView != null) {
                     exitFullscreen();
                 } else if (webView.canGoBack()) {
@@ -498,6 +555,9 @@ public class MainActivity extends AppCompatActivity {
         }
 
         public WebResourceResponse shouldIntercept(Uri url) {
+            if (url != null) {
+                ((MainActivity)context).logInfo("Intercepting URL: " + url.toString());
+            }
             if (url != null && url.getHost() != null && url.getHost().equals(virtualDomain)) {
                 String assetPath = "";
                 try {
