@@ -254,14 +254,16 @@ public class MainActivity extends AppCompatActivity {
         webView.setWebChromeClient(new WebChromeClient() {
             /**
              * 处理 WebView 触发的文件选择请求。
-             * 支持通过 accept=".directory" 触发文件夹授权模式。
+             * 1. 支持标准文件选取 (showOpenFilePicker)。
+             * 2. 支持通过 accept=".directory" 触发文件夹授权模式 (showDirectoryPicker)。
+             * 3. 支持 WebView 132+ 的标准保存模式 (showSaveFilePicker)。
              */
             @Override
             public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
                 if (mUploadCallback != null) mUploadCallback.onReceiveValue(null);
                 mUploadCallback = filePathCallback;
 
-                // 检查是否为目录拾取请求 (通过 accept=".directory" 标识)
+                // 1. 检查是否为目录拾取请求 (通过 accept=".directory" 标识)
                 boolean isDirectoryPick = false;
                 if (fileChooserParams.getAcceptTypes() != null) {
                     for (String type : fileChooserParams.getAcceptTypes()) {
@@ -272,13 +274,28 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
 
+                // 2. 检查是否为 WebView 132+ 的标准保存模式 (MODE_SAVE = 3)
+                // 注意：在旧版 SDK 中可能没有此常量，直接使用字面量 3
+                boolean isSaveMode = false;
+                try {
+                    // 尝试反射获取或直接判断值
+                    isSaveMode = (fileChooserParams.getMode() == 3);
+                } catch (Exception ignored) {}
+
                 try {
                     if (isDirectoryPick) {
-                        // 启动目录选择器
+                        // 启动目录选择器 (针对 showDirectoryPicker 的适配)
                         directoryChooserLauncher.launch(null);
                     } else {
-                        // 启动标准文件选择器
+                        // 启动标准选择器 (支持 showOpenFilePicker 和 showSaveFilePicker)
+                        // 对于 showSaveFilePicker，createIntent() 会自动生成 ACTION_CREATE_DOCUMENT
                         Intent intent = fileChooserParams.createIntent();
+                        
+                        // 如果是保存模式且有预设文件名，确保它被传递
+                        if (isSaveMode && fileChooserParams.getFilenameHint() != null) {
+                            intent.putExtra(Intent.EXTRA_TITLE, fileChooserParams.getFilenameHint());
+                        }
+                        
                         fileChooserLauncher.launch(intent);
                     }
                 } catch (Exception e) {

@@ -11,7 +11,8 @@
 - **Service Worker 支持**: 拦截 Service Worker 请求，确保 PWA 应用的离线能力。
 - **文件选择与目录授权**: 
   - 支持标准文件选取 (`<input type="file">`)。
-  - **目录授权**: 支持通过 `<input type="file" accept=".directory">` 触发 Android 存储访问框架 (SAF) 的目录选择。
+  - **标准 Web API 支持**: 在 WebView 132+ 环境下，原生支持 `window.showOpenFilePicker` 和 `window.showSaveFilePicker`。
+  - **目录授权**: 支持通过 `<input type="file" accept=".directory">` 或 `window.showDirectoryPicker` (需适配) 触发目录选择。
   - **持久化**: 授权后的目录权限在应用重启后依然有效，Java 层会静默保存授权记录。
 - **错误日志**: 内置运行时错误日志捕获与显示工具栏，方便调试。
 
