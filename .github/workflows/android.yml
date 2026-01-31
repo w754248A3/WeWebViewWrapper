@@ -29,6 +29,15 @@ jobs:
         gradle wrapper --gradle-version 8.2
         chmod +x gradlew
 
+    - name: Download Web Assets
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh release download AssetStorage --repo ${{ github.repository }} --pattern "dist.zip"
+        mkdir -p app/src/main/assets
+        unzip dist.zip -d app/src/main/assets/
+        rm dist.zip
+
     - name: Build Release APK
       run: ./gradlew assembleRelease
 
