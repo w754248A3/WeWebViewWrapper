@@ -114,8 +114,11 @@ public class MainActivity extends AppCompatActivity {
                         DocumentFile root = DocumentFile.fromTreeUri(this, uri);
                         if (root != null && root.isDirectory()) {
                             List<Uri> fileUris = new ArrayList<>();
-                            for (DocumentFile file : root.listFiles()) {
-                                if (file.isFile()) fileUris.add(file.getUri());
+                            DocumentFile[] files = root.listFiles();
+                            if (files != null) {
+                                for (DocumentFile file : files) {
+                                    if (file.isFile()) fileUris.add(file.getUri());
+                                }
                             }
                             if (!fileUris.isEmpty()) {
                                 results = fileUris.toArray(new Uri[0]);
@@ -161,12 +164,38 @@ public class MainActivity extends AppCompatActivity {
         setupWebView();
         setupBackPressed();
         
-        // 开启 WebView 的远程调试模式
+        // 开启 WebView 的远程调试模式 (仅在调试版开启)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-            WebView.setWebContentsDebuggingEnabled(true);
+            if (0 != (getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE)) {
+                WebView.setWebContentsDebuggingEnabled(true);
+            }
         }
         
         webView.loadUrl("https://mypage.test/index.html");
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (webView != null) webView.onPause();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (webView != null) webView.onResume();
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (webView != null) {
+            webView.loadDataWithBaseURL(null, "", "text/html", "utf-8", null);
+            webView.clearHistory();
+            ((ViewGroup) webView.getParent()).removeView(webView);
+            webView.destroy();
+            webView = null;
+        }
+        super.onDestroy();
     }
 
     /**
@@ -214,8 +243,12 @@ public class MainActivity extends AppCompatActivity {
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
-        settings.setAllowFileAccess(true);
+        settings.setAllowFileAccess(false);
         settings.setMediaPlaybackRequiresUserGesture(false);
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        }
         
         // 设置缓存模式
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
@@ -275,12 +308,13 @@ public class MainActivity extends AppCompatActivity {
                 }
 
                 // 2. 检查是否为 WebView 132+ 的标准保存模式 (MODE_SAVE = 3)
-                // 注意：在旧版 SDK 中可能没有此常量，直接使用字面量 3
                 boolean isSaveMode = false;
-                try {
-                    // 尝试反射获取或直接判断值
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    isSaveMode = (fileChooserParams.getMode() == WebChromeClient.FileChooserParams.MODE_SAVE);
+                } else {
+                    // 降级处理或使用字面量
                     isSaveMode = (fileChooserParams.getMode() == 3);
-                } catch (Exception ignored) {}
+                }
 
                 try {
                     if (isDirectoryPick) {
@@ -464,7 +498,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         public WebResourceResponse shouldIntercept(Uri url) {
-            if (url.getHost() != null && url.getHost().equals(virtualDomain)) {
+            if (url != null && url.getHost() != null && url.getHost().equals(virtualDomain)) {
                 String assetPath = "";
                 try {
                     String path = url.getPath();

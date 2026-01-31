@@ -10,6 +10,7 @@ import android.webkit.MimeTypeMap;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.Objects;
 
 public class MyDocumentsProvider extends DocumentsProvider {
     private static final String AUTHORITY = "com.wewebviewwrapper.provider";
@@ -47,7 +48,7 @@ public class MyDocumentsProvider extends DocumentsProvider {
                 DocumentsContract.Root.FLAG_SUPPORTS_CREATE |
                 DocumentsContract.Root.FLAG_SUPPORTS_IS_CHILD);
         row.add(DocumentsContract.Root.COLUMN_TITLE, "WeWebViewWrapper");
-        row.add(DocumentsContract.Root.COLUMN_DOCUMENT_ID, getDocIdForFile(getContext().getFilesDir()));
+        row.add(DocumentsContract.Root.COLUMN_DOCUMENT_ID, getDocIdForFile(Objects.requireNonNull(getContext()).getFilesDir()));
         row.add(DocumentsContract.Root.COLUMN_SUMMARY, "App's private storage");
         return result;
     }
@@ -126,7 +127,7 @@ public class MyDocumentsProvider extends DocumentsProvider {
 
     private String getDocIdForFile(File file) {
         String path = file.getAbsolutePath();
-        String baseDir = getContext().getFilesDir().getAbsolutePath();
+        String baseDir = Objects.requireNonNull(getContext()).getFilesDir().getAbsolutePath();
         if (path.startsWith(baseDir)) {
             path = path.substring(baseDir.length());
         }
@@ -137,7 +138,7 @@ public class MyDocumentsProvider extends DocumentsProvider {
     }
 
     private File getFileForDocId(String documentId) throws FileNotFoundException {
-        File baseDir = getContext().getFilesDir();
+        File baseDir = Objects.requireNonNull(getContext()).getFilesDir();
         if (ROOT_ID.equals(documentId) || documentId.isEmpty()) {
             return baseDir;
         }
