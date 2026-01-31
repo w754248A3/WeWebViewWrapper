@@ -351,13 +351,34 @@ public class MainActivity extends AppCompatActivity {
 
         private void initMimeTypes() {
             mimeTypes = new HashMap<>();
+            // 基础类型
             mimeTypes.put("html", "text/html");
             mimeTypes.put("css", "text/css");
             mimeTypes.put("js", "application/javascript");
             mimeTypes.put("json", "application/json");
+            // 图片
             mimeTypes.put("png", "image/png");
             mimeTypes.put("jpg", "image/jpeg");
+            mimeTypes.put("jpeg", "image/jpeg");
+            mimeTypes.put("gif", "image/gif");
+            mimeTypes.put("webp", "image/webp");
             mimeTypes.put("svg", "image/svg+xml");
+            mimeTypes.put("ico", "image/x-icon");
+            // WebAssembly
+            mimeTypes.put("wasm", "application/wasm");
+            // 字体
+            mimeTypes.put("woff", "font/woff");
+            mimeTypes.put("woff2", "font/woff2");
+            mimeTypes.put("ttf", "font/ttf");
+            mimeTypes.put("otf", "font/otf");
+            // 媒体
+            mimeTypes.put("mp3", "audio/mpeg");
+            mimeTypes.put("mp4", "video/mp4");
+            mimeTypes.put("wav", "audio/wav");
+            mimeTypes.put("webm", "video/webm");
+            // 其他
+            mimeTypes.put("txt", "text/plain");
+            mimeTypes.put("xml", "application/xml");
         }
 
         private String getMimeType(String url) {
