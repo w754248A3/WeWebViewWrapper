@@ -9,26 +9,39 @@
 - **离线优先**: 通过拦截请求，优先加载 `assets` 中的本地网页资源，无需网络连接。
 - **全屏体验**: 支持网页视频全屏播放，自动隐藏系统 UI 并旋转屏幕。
 - **Service Worker 支持**: 拦截 Service Worker 请求，确保 PWA 应用的离线能力。
-- **文件选择集成**: 将网页的文件选择请求 (`<input type="file">`) 桥接到 Android 系统文件选择器。
+- **文件选择与目录授权**: 
+  - 支持标准文件选取 (`<input type="file">`)。
+  - **目录授权**: 支持通过 `<input type="file" accept=".directory">` 触发 Android 存储访问框架 (SAF) 的目录选择。
+  - **持久化**: 授权后的目录权限在应用重启后依然有效，Java 层会静默保存授权记录。
 - **错误日志**: 内置运行时错误日志捕获与显示工具栏，方便调试。
 
 ### 2. DocumentsProvider 存储服务
-本应用保留了一个 `DocumentsProvider`，允许其他 Android 应用（通过系统文件选择器）安全地访问本应用的私有存储空间。
+本应用提供了一个 `DocumentsProvider`，允许其他应用安全访问本应用的私有存储。
 - **Authority**: `com.wewebviewwrapper.provider`
-- **支持操作**: 读取、写入、创建、删除、重命名文件和文件夹。
+- **支持操作**: 读取、写入、创建、删除、重命名。
 - **存储路径**: 应用私有目录 (`/data/user/0/com.wewebviewwrapper/files`)。
 
-## 技术特性
-- **纯 Java 编写**: 保持代码简洁易读。
-- **Android 8.0+ 支持**: 适配 Android 14 (API 34) 规范，兼容至 Android 8.0 (API 26)。
-- **云端构建**: 本地无需安装 Android 开发环境，完全依赖 GitHub Actions 进行构建、签署和发布。
+## 开发者指南 (Web 端)
 
-## 如何构建与获取
-1. **GitHub Actions**: 每次推送到 `main` 分支都会触发自动构建。
-2. **自动发布**: 
-   - 推送到 `main` 分支会自动更新 `latest` Release 页面。
-   - 推送版本标签（如 `v1.3`）会创建一个正式的 Release。
-3. **下载**: 请前往项目的 [Releases](../../releases) 页面下载签署后的 APK。
+### 目录授权集成
+要在您的网页中请求用户授权访问某个文件夹，只需添加以下 HTML 元素：
+```html
+<input type="file" accept=".directory" onchange="onDirPicked(this.files)">
+```
+当用户选择文件夹并确认授权后，Java 层会锁定该目录的**持久访问权限**，并返回该目录下的文件列表。
+
+### 私有存储访问
+推荐使用标准的 **Origin Private File System (OPFS)** API 进行网页私有数据的读写，无需额外权限。
+
+## 如何构建
+项目完全支持云端自动化构建，无需本地配置 Android 环境：
+1. **GitHub Actions**: 每次推送代码到 `main` 分支，GitHub Actions 会自动执行构建脚本。
+2. **签署与发布**: 
+   - 构建产生的 APK 会自动使用预设的 KeyStore 进行签署。
+   - 签署后的 APK 会发布在项目的 [Releases](../../releases) 页面。
+3. **本地构建**: 
+   - 如果您有本地环境，使用 `./gradlew assembleRelease` 即可。
+   - 要求 JDK 17 及 Android SDK 34。
 
 ## 使用说明
 1. 安装 APK 后，打开应用即进入本地网页。

@@ -35,13 +35,20 @@ import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.documentfile.provider.DocumentFile;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
+/**
+ * 应用主界面，包含 WebView 核心逻辑、全屏切换处理以及存储授权管理。
+ */
 public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "WeWebViewWrapper";
@@ -59,6 +66,9 @@ public class MainActivity extends AppCompatActivity {
     private FrameLayout fullscreenContainer;
     private int originalOrientation;
 
+    /**
+     * 文件选择器启动器，处理标准文件选取请求（支持单选和多选）。
+     */
     private final ActivityResultLauncher<Intent> fileChooserLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
             result -> {
@@ -81,11 +91,63 @@ public class MainActivity extends AppCompatActivity {
             }
     );
 
+    /**
+     * 目录选择器启动器，处理文件夹授权请求，并实现持久化访问。
+     */
+    private final ActivityResultLauncher<Uri> directoryChooserLauncher = registerForActivityResult(
+            new ActivityActivityResultContractsOpenDocumentTree(),
+            uri -> {
+                if (mUploadCallback != null) {
+                    Uri[] results = null;
+                    if (uri != null) {
+                        // 1. 获取持久化访问权限
+                        final int takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
+                        getContentResolver().takePersistableUriPermission(uri, takeFlags);
+
+                        // 2. 将授权的 URI 静默保存到本地配置中
+                        getSharedPreferences("storage_prefs", MODE_PRIVATE)
+                                .edit()
+                                .putString("last_authorized_dir", uri.toString())
+                                .apply();
+
+                        // 3. 遍历目录下的文件，返回给 WebView (模拟 webkitdirectory 行为)
+                        DocumentFile root = DocumentFile.fromTreeUri(this, uri);
+                        if (root != null && root.isDirectory()) {
+                            List<Uri> fileUris = new ArrayList<>();
+                            for (DocumentFile file : root.listFiles()) {
+                                if (file.isFile()) fileUris.add(file.getUri());
+                            }
+                            if (!fileUris.isEmpty()) {
+                                results = fileUris.toArray(new Uri[0]);
+                            }
+                        }
+                    }
+                    mUploadCallback.onReceiveValue(results);
+                    mUploadCallback = null;
+                }
+            }
+    );
+
+    /**
+     * 自定义目录选择合同，用于适配 ActivityResultLauncher。
+     */
+    private static class ActivityActivityResultContractsOpenDocumentTree extends ActivityResultContracts.OpenDocumentTree {
+        @Override
+        public Intent createIntent(Context context, Uri input) {
+            Intent intent = super.createIntent(context, input);
+            // 确保请求持久化权限所需的标志
+            intent.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            return intent;
+        }
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        // Setup error logging for this activity's lifecycle
+        // 设置全局异常捕获，以便在调试控制台中显示
         Thread.setDefaultUncaughtExceptionHandler((thread, throwable) -> {
             logError("Uncaught Exception: " + Log.getStackTraceString(throwable));
         });
@@ -99,7 +161,7 @@ public class MainActivity extends AppCompatActivity {
         setupWebView();
         setupBackPressed();
         
-        // Enable remote debugging for WebView
+        // 开启 WebView 的远程调试模式
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
             WebView.setWebContentsDebuggingEnabled(true);
         }
@@ -107,6 +169,9 @@ public class MainActivity extends AppCompatActivity {
         webView.loadUrl("https://mypage.test/index.html");
     }
 
+    /**
+     * 初始化布局视图和底部工具栏按钮事件。
+     */
     private void initViews() {
         webView = findViewById(R.id.webview);
         bottomToolbar = findViewById(R.id.bottom_toolbar);
@@ -142,6 +207,9 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * 配置 WebView 的核心属性，包括 JS 启用、DOM 存储以及资源请求拦截。
+     */
     private void setupWebView() {
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -149,15 +217,21 @@ public class MainActivity extends AppCompatActivity {
         settings.setAllowFileAccess(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
         
-        // Performance
+        // 设置缓存模式
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
         
         webView.setWebViewClient(new WebViewClient() {
+            /**
+             * 拦截并处理 WebView 发起的资源请求，支持从 assets 中加载本地资源。
+             */
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 return assetLoader.shouldIntercept(request.getUrl());
             }
 
+            /**
+             * 捕获并记录 WebView 加载过程中的错误。
+             */
             @Override
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 if (request.isForMainFrame()) {
@@ -166,6 +240,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        // 针对 Service Worker 拦截配置，确保离线能力
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             ServiceWorkerController swController = ServiceWorkerController.getInstance();
             swController.setServiceWorkerClient(new ServiceWorkerClient() {
@@ -177,14 +252,35 @@ public class MainActivity extends AppCompatActivity {
         }
 
         webView.setWebChromeClient(new WebChromeClient() {
+            /**
+             * 处理 WebView 触发的文件选择请求。
+             * 支持通过 accept=".directory" 触发文件夹授权模式。
+             */
             @Override
             public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
                 if (mUploadCallback != null) mUploadCallback.onReceiveValue(null);
                 mUploadCallback = filePathCallback;
 
-                Intent intent = fileChooserParams.createIntent();
+                // 检查是否为目录拾取请求 (通过 accept=".directory" 标识)
+                boolean isDirectoryPick = false;
+                if (fileChooserParams.getAcceptTypes() != null) {
+                    for (String type : fileChooserParams.getAcceptTypes()) {
+                        if (".directory".equalsIgnoreCase(type)) {
+                            isDirectoryPick = true;
+                            break;
+                        }
+                    }
+                }
+
                 try {
-                    fileChooserLauncher.launch(intent);
+                    if (isDirectoryPick) {
+                        // 启动目录选择器
+                        directoryChooserLauncher.launch(null);
+                    } else {
+                        // 启动标准文件选择器
+                        Intent intent = fileChooserParams.createIntent();
+                        fileChooserLauncher.launch(intent);
+                    }
                 } catch (Exception e) {
                     mUploadCallback = null;
                     logError("File Chooser Error: " + e.getMessage());
@@ -193,6 +289,9 @@ public class MainActivity extends AppCompatActivity {
                 return true;
             }
 
+            /**
+             * 进入全屏模式播放视频。
+             */
             @Override
             public void onShowCustomView(View view, CustomViewCallback callback) {
                 if (customView != null) {
@@ -216,6 +315,9 @@ public class MainActivity extends AppCompatActivity {
                 bottomToolbar.setVisibility(View.GONE);
             }
 
+            /**
+             * 退出全屏模式。
+             */
             @Override
             public void onHideCustomView() {
                 exitFullscreen();
@@ -241,12 +343,18 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * 记录错误日志并输出到控制台及调试面板。
+     */
     private void logError(String message) {
         String timestamp = new java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(new java.util.Date());
         errorLogs.append("[").append(timestamp).append("] ").append(message).append("\n\n");
         Log.e(TAG, message);
     }
 
+    /**
+     * 退出全屏并恢复系统 UI 状态。
+     */
     private void exitFullscreen() {
         if (customView == null) return;
         showSystemUI();
@@ -260,6 +368,10 @@ public class MainActivity extends AppCompatActivity {
         bottomToolbar.setVisibility(View.VISIBLE);
     }
 
+    /**
+     * 隐藏状态栏和导航栏（适配 Android 11+ 及旧版本）。
+     */
+    @SuppressWarnings("deprecation")
     private void hideSystemUI() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             WindowInsetsController controller = getWindow().getInsetsController();
@@ -278,6 +390,10 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * 显示状态栏和导航栏。
+     */
+    @SuppressWarnings("deprecation")
     private void showSystemUI() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             WindowInsetsController controller = getWindow().getInsetsController();
@@ -292,6 +408,9 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * 设置返回键拦截逻辑：优先关闭日志、退出全屏、网页后退，最后才退出应用。
+     */
     private void setupBackPressed() {
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
@@ -311,6 +430,9 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * 内部辅助类：负责拦截 WebView 的网络请求，并将其重定向到应用的 assets 目录。
+     */
     private static class AssetResourceLoader {
         private Activity context;
         private String virtualDomain;
