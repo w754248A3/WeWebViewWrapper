@@ -48,6 +48,7 @@ import androidx.documentfile.provider.DocumentFile;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -170,9 +171,20 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        // 设置全局异常捕获，以便在调试控制台中显示
+        // 设置全局异常捕获，使用弱引用防止 Activity 泄漏
+        final Thread.UncaughtExceptionHandler defaultHandler = Thread.getDefaultUncaughtExceptionHandler();
+        final WeakReference<MainActivity> activityRef = new WeakReference<>(this);
         Thread.setDefaultUncaughtExceptionHandler((thread, throwable) -> {
-            logError("Uncaught Exception: " + Log.getStackTraceString(throwable));
+            String stackTrace = Log.getStackTraceString(throwable);
+            MainActivity activity = activityRef.get();
+            if (activity != null) {
+                activity.logError("Uncaught Exception: " + stackTrace);
+            } else {
+                Log.e(TAG, "Uncaught Exception (Activity dead): " + stackTrace);
+            }
+            if (defaultHandler != null) {
+                defaultHandler.uncaughtException(thread, throwable);
+            }
         });
 
         setContentView(R.layout.activity_main);
@@ -280,7 +292,10 @@ public class MainActivity extends AppCompatActivity {
             ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
             ClipData clip = ClipData.newPlainText("Error Logs", errorLogs.toString());
             clipboard.setPrimaryClip(clip);
-            Toast.makeText(this, "Logs copied to clipboard", Toast.LENGTH_SHORT).show();
+            // Android 13+ (API 33) 会自动显示复制成功的系统提示，避免重复弹出 Toast
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                Toast.makeText(this, "Logs copied to clipboard", Toast.LENGTH_SHORT).show();
+            }
         });
     }
 
@@ -291,7 +306,7 @@ public class MainActivity extends AppCompatActivity {
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
-        settings.setDatabaseEnabled(true);
+        // setDatabaseEnabled 已在 API 19 废弃，在现代 WebView 中无实际作用
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(false);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
@@ -336,13 +351,15 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // 针对 Service Worker 拦截配置，确保离线能力
+        // 针对 Service Worker 拦截配置，确保离线能力并防止内存泄漏
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             ServiceWorkerController swController = ServiceWorkerController.getInstance();
+            final WeakReference<AssetResourceLoader> loaderRef = new WeakReference<>(assetLoader);
             swController.setServiceWorkerClient(new ServiceWorkerClient() {
                 @Override
                 public WebResourceResponse shouldInterceptRequest(WebResourceRequest request) {
-                    return assetLoader.shouldIntercept(request.getUrl());
+                    AssetResourceLoader loader = loaderRef.get();
+                    return loader != null ? loader.shouldIntercept(request.getUrl()) : null;
                 }
             });
         }
@@ -458,10 +475,15 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onPermissionRequest(android.webkit.PermissionRequest request) {
                 logInfo("WebView onPermissionRequest: " + Arrays.toString(request.getResources()), false);
-                // 仅对信任的本地域名授权，或添加用户确认逻辑
+                // 仅对信任的本地域名授权
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                    // 安全建议：在生产环境中应检查 request.getOrigin() 是否为 localhost
-                    request.grant(request.getResources());
+                    String origin = request.getOrigin().toString();
+                    if ("https://localhost".equals(origin) || "https://localhost/".equals(origin)) {
+                        request.grant(request.getResources());
+                    } else {
+                        logError("Blocked permission request from untrusted origin: " + origin);
+                        request.deny();
+                    }
                 }
             }
 
@@ -726,21 +748,24 @@ public class MainActivity extends AppCompatActivity {
      * 内部辅助类：负责拦截 WebView 的网络请求，并将其重定向到应用的 assets 目录。
      */
     private static class AssetResourceLoader {
-        private Activity context;
-        private String virtualDomain;
-        private String localAssetBase;
+        private final WeakReference<MainActivity> activityRef;
+        private final Context appContext;
+        private final String virtualDomain;
+        private final String localAssetBase;
         private Map<String, String> mimeTypes;
 
-        public AssetResourceLoader(Activity context, String domain, String assetBase) {
-            this.context = context;
+        public AssetResourceLoader(MainActivity activity, String domain, String assetBase) {
+            this.activityRef = new WeakReference<>(activity);
+            this.appContext = activity.getApplicationContext();
             this.virtualDomain = domain;
             this.localAssetBase = assetBase;
             initMimeTypes();
         }
 
         public WebResourceResponse shouldIntercept(Uri url) {
-            if (url != null) {
-                ((MainActivity)context).logInfo("Intercepting URL: " + url.toString());
+            MainActivity activity = activityRef.get();
+            if (activity != null) {
+                activity.logInfo("Intercepting URL: " + url.toString());
             }
             if (url != null && url.getHost() != null && url.getHost().equals(virtualDomain)) {
                 String assetPath = "";
@@ -754,11 +779,13 @@ public class MainActivity extends AppCompatActivity {
                     }
                     assetPath = (localAssetBase.isEmpty() ? "" : localAssetBase + "/") + path;
 
-                    InputStream stream = context.getAssets().open(assetPath);
+                    InputStream stream = appContext.getAssets().open(assetPath);
                     String mimeType = getMimeType(assetPath);
                     return new WebResourceResponse(mimeType, "UTF-8", stream);
                 } catch (IOException e) {
-                    ((MainActivity)context).logError("Asset File not found: " + assetPath);
+                    if (activity != null) {
+                        activity.logError("Asset File not found: " + assetPath);
+                    }
                     String errorHtml = "<html><body><h2 style='color:red;'>404 Not Found</h2><p>" + assetPath + "</p></body></html>";
                     return new WebResourceResponse("text/html", "UTF-8", 404, "Not Found", null, new ByteArrayInputStream(errorHtml.getBytes()));
                 }
