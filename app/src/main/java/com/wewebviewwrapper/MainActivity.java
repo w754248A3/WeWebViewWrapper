@@ -1,11 +1,13 @@
 package com.wewebviewwrapper;
 
+import android.Manifest;
 import android.app.Activity;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -36,6 +38,7 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SwitchCompat;
+import androidx.core.content.ContextCompat;
 import androidx.documentfile.provider.DocumentFile;
 
 import java.io.ByteArrayInputStream;
@@ -76,6 +79,7 @@ public class MainActivity extends AppCompatActivity {
     private final ActivityResultLauncher<Intent> fileChooserLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
             result -> {
+                logInfo("fileChooserLauncher Callback: ResultCode=" + result.getResultCode() + ", HasData=" + (result.getData() != null));
                 if (mUploadCallback != null) {
                     Uri[] results = null;
                     if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
@@ -93,11 +97,13 @@ public class MainActivity extends AppCompatActivity {
                     if (results != null) {
                         logInfo("File chooser result: SUCCESS, count=" + results.length);
                     } else {
-                        logInfo("File chooser result: CANCELLED or EMPTY");
+                        logInfo("File chooser result: CANCELLED (or result code not OK)");
                     }
                     
                     mUploadCallback.onReceiveValue(results);
                     mUploadCallback = null;
+                } else {
+                    logError("fileChooserLauncher Callback: mUploadCallback is NULL, cannot return result");
                 }
             }
     );
@@ -108,6 +114,7 @@ public class MainActivity extends AppCompatActivity {
     private final ActivityResultLauncher<Uri> directoryChooserLauncher = registerForActivityResult(
             new ActivityActivityResultContractsOpenDocumentTree(),
             uri -> {
+                logInfo("directoryChooserLauncher Callback: URI=" + (uri != null ? uri.toString() : "NULL"));
                 if (mUploadCallback != null) {
                     Uri[] results = null;
                     if (uri != null) {
@@ -125,15 +132,17 @@ public class MainActivity extends AppCompatActivity {
 
                             // 3. 直接返回目录 URI (适配 Web File System Access API)
                             results = new Uri[]{uri};
-                            logInfo("Directory selected: " + uri.toString());
+                            logInfo("Directory result sent to WebView: " + uri.toString());
                         } catch (Exception e) {
-                            logError("Directory Chooser Processing Error: " + Log.getStackTraceString(e));
+                            logError("Directory Chooser Post-Processing Error: " + Log.getStackTraceString(e));
                         }
                     } else {
-                        logInfo("Directory chooser result: CANCELLED");
+                        logInfo("Directory chooser result: CANCELLED (URI is NULL)");
                     }
                     mUploadCallback.onReceiveValue(results);
                     mUploadCallback = null;
+                } else {
+                    logError("directoryChooserLauncher Callback: mUploadCallback is NULL, cannot return result");
                 }
             }
     );
@@ -315,17 +324,24 @@ public class MainActivity extends AppCompatActivity {
              */
             @Override
             public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
+                logInfo("onShowFileChooser ENTERED", false);
                 if (mUploadCallback != null) {
+                    logInfo("Cancelling previous pending upload callback", false);
                     try {
                         mUploadCallback.onReceiveValue(null);
-                    } catch (Exception ignored) {}
+                    } catch (Exception e) {
+                        logError("Error cancelling previous callback: " + e.getMessage());
+                    }
                 }
                 mUploadCallback = filePathCallback;
 
                 int mode = fileChooserParams.getMode();
                 String[] acceptTypes = fileChooserParams.getAcceptTypes();
                 String acceptStr = acceptTypes != null ? Arrays.toString(acceptTypes) : "none";
-                logInfo("onShowFileChooser triggered. Mode: " + mode + ", Accept: " + acceptStr);
+                String hint = fileChooserParams.getFilenameHint();
+                
+                logInfo("FileChooser Params: Mode=" + mode + ", Accept=" + acceptStr + ", Hint=" + (hint != null ? hint : "NULL"), false);
+                logPermissionStatus();
 
                 // 1. 识别目录拾取 (MODE_OPEN_FOLDER = 2 或特定的 .directory 约定)
                 boolean isDirectoryPick = (mode == 2);
@@ -341,47 +357,78 @@ public class MainActivity extends AppCompatActivity {
                 // 2. 识别保存模式 (MODE_SAVE = 3)
                 boolean isSaveMode = (mode == 3);
 
-                logInfo("Picker Type: " + (isDirectoryPick ? "DIRECTORY" : (isSaveMode ? "SAVE" : "OPEN")));
+                logInfo("Determined Picker Type: " + (isDirectoryPick ? "DIRECTORY" : (isSaveMode ? "SAVE" : "OPEN")), false);
 
                 try {
                     if (isDirectoryPick) {
-                        logInfo("Launching directory chooser...");
+                        logInfo("Launching directoryChooserLauncher...", false);
                         directoryChooserLauncher.launch(null);
                     } else if (isSaveMode) {
-                        logInfo("Launching save file chooser...");
+                        logInfo("Building Intent.ACTION_CREATE_DOCUMENT...", false);
                         // 手动构建 ACTION_CREATE_DOCUMENT 以确保兼容性
                         Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
                         intent.addCategory(Intent.CATEGORY_OPENABLE);
                         
-                        // 设置 MIME 类型
+                        // 设置 MIME 类型：确保是一个合法的 MIME 类型字符串，而不是后缀名
+                        String mimeType = "*/*";
                         if (acceptTypes != null && acceptTypes.length > 0 && !acceptTypes[0].isEmpty()) {
-                            intent.setType(acceptTypes[0]);
-                        } else {
-                            intent.setType("*/*");
+                            String firstType = acceptTypes[0];
+                            if (firstType.contains("/") || firstType.equals("*")) {
+                                mimeType = firstType;
+                            } else if (firstType.startsWith(".")) {
+                                // 简单转换，虽然不完善但能减少崩溃
+                                logInfo("Found extension instead of MIME: " + firstType + ", using default */*", true);
+                            }
                         }
+                        logInfo("Setting Intent MIME Type: " + mimeType, false);
+                        intent.setType(mimeType);
                         
                         // 设置预设文件名
-                        String filename = fileChooserParams.getFilenameHint();
-                        if (filename != null && !filename.isEmpty()) {
-                            intent.putExtra(Intent.EXTRA_TITLE, filename);
+                        if (hint != null && !hint.isEmpty()) {
+                            logInfo("Setting Intent EXTRA_TITLE: " + hint, false);
+                            intent.putExtra(Intent.EXTRA_TITLE, hint);
                         }
                         
+                        logInfo("Launching fileChooserLauncher for SAVE...", false);
                         fileChooserLauncher.launch(intent);
                     } else {
                         // 标准打开文件 (单选或多选)
                         Intent intent = fileChooserParams.createIntent();
-                        logInfo("Launching standard file chooser: " + intent.getAction());
+                        logInfo("Standard Intent Action: " + intent.getAction(), false);
+                        logInfo("Launching fileChooserLauncher for OPEN...", false);
                         fileChooserLauncher.launch(intent);
                     }
                 } catch (Exception e) {
-                    logError("File Chooser Launch Error: " + Log.getStackTraceString(e));
+                    logError("CRITICAL: File Chooser Launch Exception: " + Log.getStackTraceString(e));
                     if (mUploadCallback != null) {
                         mUploadCallback.onReceiveValue(null);
                         mUploadCallback = null;
                     }
                     return false;
                 }
+                logInfo("onShowFileChooser EXIT (Returning TRUE)", false);
                 return true;
+            }
+
+            @Override
+            public boolean onConsoleMessage(android.webkit.ConsoleMessage consoleMessage) {
+                String msg = "JS Console [" + consoleMessage.messageLevel() + "]: " + consoleMessage.message() 
+                           + " (at " + consoleMessage.sourceId() + ":" + consoleMessage.lineNumber() + ")";
+                if (consoleMessage.messageLevel() == android.webkit.ConsoleMessage.MessageLevel.ERROR) {
+                    logError(msg);
+                } else {
+                    logInfo(msg, true);
+                }
+                return true;
+            }
+
+            @Override
+            public void onPermissionRequest(android.webkit.PermissionRequest request) {
+                logInfo("WebView onPermissionRequest: " + Arrays.toString(request.getResources()), false);
+                // 默认授权
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    request.grant(request.getResources());
+                }
             }
 
             /**
@@ -439,11 +486,20 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * 记录普通信息日志（仅在详细日志模式开启时记录）。
+     * 记录普通信息日志（核心生命周期日志不受开关限制）。
      */
     private void logInfo(String message) {
-        if (isDetailedLogEnabled) {
-            String timestamp = new java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(new java.util.Date());
+        logInfo(message, false);
+    }
+
+    /**
+     * 记录信息日志。
+     * @param message 消息
+     * @param isVerbose 是否为冗余日志（受开关控制）
+     */
+    private void logInfo(String message, boolean isVerbose) {
+        if (!isVerbose || isDetailedLogEnabled) {
+            String timestamp = new java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.getDefault()).format(new java.util.Date());
             errorLogs.append("[").append(timestamp).append("] [INFO] ").append(message).append("\n\n");
             Log.i(TAG, message);
         }
@@ -453,7 +509,7 @@ public class MainActivity extends AppCompatActivity {
      * 记录错误日志并输出到控制台及调试面板。
      */
     private void logError(String message) {
-        String timestamp = new java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(new java.util.Date());
+        String timestamp = new java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.getDefault()).format(new java.util.Date());
         errorLogs.append("[").append(timestamp).append("] [ERROR] ").append(message).append("\n\n");
         Log.e(TAG, message);
     }
@@ -536,6 +592,32 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         });
+    }
+
+    /**
+     * 记录当前应用的关键权限持有状态。
+     */
+    private void logPermissionStatus() {
+        String[] permissions;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions = new String[]{
+                    Manifest.permission.READ_MEDIA_IMAGES,
+                    Manifest.permission.READ_MEDIA_VIDEO,
+                    Manifest.permission.READ_MEDIA_AUDIO
+            };
+        } else {
+            permissions = new String[]{
+                    Manifest.permission.READ_EXTERNAL_STORAGE,
+                    Manifest.permission.WRITE_EXTERNAL_STORAGE
+            };
+        }
+
+        StringBuilder sb = new StringBuilder("Permission Status: ");
+        for (String p : permissions) {
+            boolean granted = ContextCompat.checkSelfPermission(this, p) == PackageManager.PERMISSION_GRANTED;
+            sb.append(p.substring(p.lastIndexOf('.') + 1)).append("=").append(granted ? "GRANTED" : "DENIED").append(", ");
+        }
+        logInfo(sb.toString(), true);
     }
 
     /**
