@@ -279,8 +279,15 @@ public class MainActivity extends AppCompatActivity {
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
+        settings.setDatabaseEnabled(true);
         settings.setAllowFileAccess(true);
         settings.setAllowContentAccess(true);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
+            settings.setAllowFileAccessFromFileURLs(true);
+            settings.setAllowUniversalAccessFromFileURLs(true);
+        }
+        settings.setJavaScriptCanOpenWindowsAutomatically(true);
+        settings.setSupportMultipleWindows(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -438,6 +445,16 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
 
+            @Override
+            public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, android.os.Message resultMsg) {
+                logInfo("WebView onCreateWindow called (isDialog=" + isDialog + ", isUserGesture=" + isUserGesture + ")", false);
+                // 对于文件拾取器触发的“窗口”，我们通常不需要真正创建新窗口，
+                // 但返回 true 并处理它可以防止某些内核直接取消操作。
+                WebView.HitTestResult result = view.getHitTestResult();
+                logInfo("HitTestResult type: " + result.getType(), true);
+                return false;
+            }
+
             /**
              * 进入全屏模式播放视频。
              */
@@ -509,7 +526,12 @@ public class MainActivity extends AppCompatActivity {
             String timestamp = new java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.getDefault()).format(new java.util.Date());
             String entry = "[" + timestamp + "] [INFO] " + message + "\n\n";
             errorLogs.append(entry);
-            Log.i(TAG, message);
+            // 核心逻辑使用 Log.e 确保在 adb logcat 中不被丢失
+            if (!isVerbose) {
+                Log.e(TAG, "[CORE_INFO] " + message);
+            } else {
+                Log.i(TAG, message);
+            }
             // 实时输出到 TextView (如果可见)
             if (logTextView != null && logContainer != null && logContainer.getVisibility() == View.VISIBLE) {
                 runOnUiThread(() -> logTextView.setText(errorLogs.toString()));
