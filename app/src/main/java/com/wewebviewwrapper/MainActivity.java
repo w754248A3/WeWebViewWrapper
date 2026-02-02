@@ -123,23 +123,9 @@ public class MainActivity extends AppCompatActivity {
                                     .putString("last_authorized_dir", uri.toString())
                                     .apply();
 
-                            // 3. 遍历目录下的文件，返回给 WebView (模拟 webkitdirectory 行为)
-                            DocumentFile root = DocumentFile.fromTreeUri(this, uri);
-                            if (root != null && root.isDirectory()) {
-                                List<Uri> fileUris = new ArrayList<>();
-                                DocumentFile[] files = root.listFiles();
-                                if (files != null) {
-                                    for (DocumentFile file : files) {
-                                        if (file.isFile()) fileUris.add(file.getUri());
-                                    }
-                                }
-                                if (!fileUris.isEmpty()) {
-                                    results = fileUris.toArray(new Uri[0]);
-                                    logInfo("Directory traversal: SUCCESS, file count=" + results.length);
-                                } else {
-                                    logInfo("Directory traversal: EMPTY");
-                                }
-                            }
+                            // 3. 直接返回目录 URI (适配 Web File System Access API)
+                            results = new Uri[]{uri};
+                            logInfo("Directory selected: " + uri.toString());
                         } catch (Exception e) {
                             logError("Directory Chooser Processing Error: " + Log.getStackTraceString(e));
                         }
@@ -329,16 +315,22 @@ public class MainActivity extends AppCompatActivity {
              */
             @Override
             public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
-                if (mUploadCallback != null) mUploadCallback.onReceiveValue(null);
+                if (mUploadCallback != null) {
+                    try {
+                        mUploadCallback.onReceiveValue(null);
+                    } catch (Exception ignored) {}
+                }
                 mUploadCallback = filePathCallback;
 
-                String acceptTypes = fileChooserParams.getAcceptTypes() != null ? Arrays.toString(fileChooserParams.getAcceptTypes()) : "none";
-                logInfo("onShowFileChooser triggered. Accept types: " + acceptTypes);
+                int mode = fileChooserParams.getMode();
+                String[] acceptTypes = fileChooserParams.getAcceptTypes();
+                String acceptStr = acceptTypes != null ? Arrays.toString(acceptTypes) : "none";
+                logInfo("onShowFileChooser triggered. Mode: " + mode + ", Accept: " + acceptStr);
 
-                // 1. 检查是否为目录拾取请求 (通过 accept=".directory" 标识)
-                boolean isDirectoryPick = false;
-                if (fileChooserParams.getAcceptTypes() != null) {
-                    for (String type : fileChooserParams.getAcceptTypes()) {
+                // 1. 识别目录拾取 (MODE_OPEN_FOLDER = 2 或特定的 .directory 约定)
+                boolean isDirectoryPick = (mode == 2);
+                if (!isDirectoryPick && acceptTypes != null) {
+                    for (String type : acceptTypes) {
                         if (".directory".equalsIgnoreCase(type)) {
                             isDirectoryPick = true;
                             break;
@@ -346,39 +338,47 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
 
-                // 2. 检查是否为 WebView 132+ 的标准保存模式 (MODE_SAVE = 3)
-                boolean isSaveMode = false;
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                    isSaveMode = (fileChooserParams.getMode() == WebChromeClient.FileChooserParams.MODE_SAVE);
-                } else {
-                    // 降级处理或使用字面量
-                    isSaveMode = (fileChooserParams.getMode() == 3);
-                }
+                // 2. 识别保存模式 (MODE_SAVE = 3)
+                boolean isSaveMode = (mode == 3);
 
-                logInfo("File picker mode: " + (isDirectoryPick ? "DIRECTORY" : (isSaveMode ? "SAVE" : "OPEN")));
+                logInfo("Picker Type: " + (isDirectoryPick ? "DIRECTORY" : (isSaveMode ? "SAVE" : "OPEN")));
 
                 try {
                     if (isDirectoryPick) {
-                        // 启动目录选择器 (针对 showDirectoryPicker 的适配)
                         logInfo("Launching directory chooser...");
                         directoryChooserLauncher.launch(null);
-                    } else {
-                        // 启动标准选择器 (支持 showOpenFilePicker 和 showSaveFilePicker)
-                        // 对于 showSaveFilePicker，createIntent() 会自动生成 ACTION_CREATE_DOCUMENT
-                        Intent intent = fileChooserParams.createIntent();
+                    } else if (isSaveMode) {
+                        logInfo("Launching save file chooser...");
+                        // 手动构建 ACTION_CREATE_DOCUMENT 以确保兼容性
+                        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                        intent.addCategory(Intent.CATEGORY_OPENABLE);
                         
-                        // 如果是保存模式且有预设文件名，确保它被传递
-                        if (isSaveMode && fileChooserParams.getFilenameHint() != null) {
-                            logInfo("Save mode with hint: " + fileChooserParams.getFilenameHint());
-                            intent.putExtra(Intent.EXTRA_TITLE, fileChooserParams.getFilenameHint());
+                        // 设置 MIME 类型
+                        if (acceptTypes != null && acceptTypes.length > 0 && !acceptTypes[0].isEmpty()) {
+                            intent.setType(acceptTypes[0]);
+                        } else {
+                            intent.setType("*/*");
                         }
                         
-                        logInfo("Launching file chooser intent: " + intent.getAction());
+                        // 设置预设文件名
+                        String filename = fileChooserParams.getFilenameHint();
+                        if (filename != null && !filename.isEmpty()) {
+                            intent.putExtra(Intent.EXTRA_TITLE, filename);
+                        }
+                        
+                        fileChooserLauncher.launch(intent);
+                    } else {
+                        // 标准打开文件 (单选或多选)
+                        Intent intent = fileChooserParams.createIntent();
+                        logInfo("Launching standard file chooser: " + intent.getAction());
                         fileChooserLauncher.launch(intent);
                     }
                 } catch (Exception e) {
-                    mUploadCallback = null;
-                    logError("File Chooser Error: " + Log.getStackTraceString(e));
+                    logError("File Chooser Launch Error: " + Log.getStackTraceString(e));
+                    if (mUploadCallback != null) {
+                        mUploadCallback.onReceiveValue(null);
+                        mUploadCallback = null;
+                    }
                     return false;
                 }
                 return true;

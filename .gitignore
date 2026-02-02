@@ -17,6 +17,7 @@ captures/
 output-metadata.json
 .old/
 .trae/
+.testHTML/
 # IntelliJ
 *.iml
 .idea/
