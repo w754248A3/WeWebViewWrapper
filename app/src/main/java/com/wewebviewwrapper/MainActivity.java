@@ -174,12 +174,17 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         originalOrientation = getRequestedOrientation();
-        assetLoader = new AssetResourceLoader(this, "mypage.test", "dist"); 
+        assetLoader = new AssetResourceLoader(this, "localhost", "dist"); 
 
         initViews();
         setupWebView();
         setupBackPressed();
         
+        // 打印环境信息
+        logInfo("=== APP STARTING ===");
+        logInfo("WebView Version: " + webView.getSettings().getUserAgentString());
+        logPermissionStatus();
+
         // 开启 WebView 的远程调试模式 (仅在调试版开启)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
             if (0 != (getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE)) {
@@ -187,7 +192,7 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         
-        webView.loadUrl("https://mypage.test/index.html");
+        webView.loadUrl("http://localhost/index.html");
     }
 
     @Override
@@ -230,7 +235,7 @@ public class MainActivity extends AppCompatActivity {
         });
 
         findViewById(R.id.btn_home).setOnClickListener(v -> {
-            webView.loadUrl("https://mypage.test/index.html");
+            webView.loadUrl("http://localhost/index.html");
         });
 
         findViewById(R.id.btn_forward).setOnClickListener(v -> {
@@ -274,11 +279,12 @@ public class MainActivity extends AppCompatActivity {
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
-        settings.setAllowFileAccess(false);
+        settings.setAllowFileAccess(true);
+        settings.setAllowContentAccess(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+            settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         }
         
         // 设置缓存模式
@@ -324,6 +330,7 @@ public class MainActivity extends AppCompatActivity {
              */
             @Override
             public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
+                logInfo(">>>>>> ON_SHOW_FILE_CHOOSER TRIGGERED <<<<<<", false);
                 logInfo("onShowFileChooser ENTERED", false);
                 if (mUploadCallback != null) {
                     logInfo("Cancelling previous pending upload callback", false);
@@ -500,8 +507,13 @@ public class MainActivity extends AppCompatActivity {
     private void logInfo(String message, boolean isVerbose) {
         if (!isVerbose || isDetailedLogEnabled) {
             String timestamp = new java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.getDefault()).format(new java.util.Date());
-            errorLogs.append("[").append(timestamp).append("] [INFO] ").append(message).append("\n\n");
+            String entry = "[" + timestamp + "] [INFO] " + message + "\n\n";
+            errorLogs.append(entry);
             Log.i(TAG, message);
+            // 实时输出到 TextView (如果可见)
+            if (logTextView != null && logContainer != null && logContainer.getVisibility() == View.VISIBLE) {
+                runOnUiThread(() -> logTextView.setText(errorLogs.toString()));
+            }
         }
     }
 
@@ -510,8 +522,12 @@ public class MainActivity extends AppCompatActivity {
      */
     private void logError(String message) {
         String timestamp = new java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.getDefault()).format(new java.util.Date());
-        errorLogs.append("[").append(timestamp).append("] [ERROR] ").append(message).append("\n\n");
+        String entry = "[" + timestamp + "] [ERROR] " + message + "\n\n";
+        errorLogs.append(entry);
         Log.e(TAG, message);
+        if (logTextView != null && logContainer != null && logContainer.getVisibility() == View.VISIBLE) {
+            runOnUiThread(() -> logTextView.setText(errorLogs.toString()));
+        }
     }
 
     /**
