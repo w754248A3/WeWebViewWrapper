@@ -8,10 +8,14 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -58,7 +62,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAG = "WeWebViewWrapper";
     private WebView webView;
     private ValueCallback<Uri[]> mUploadCallback;
-    private StringBuilder errorLogs = new StringBuilder();
+    private StringBuffer errorLogs = new StringBuffer();
     private TextView logTextView;
     private View logContainer;
     private View settingsContainer;
@@ -192,7 +196,7 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         
-        webView.loadUrl("http://localhost/index.html");
+        webView.loadUrl("https://localhost/index.html");
     }
 
     @Override
@@ -210,9 +214,17 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         if (webView != null) {
+            // 停止加载并清除历史，防止内存泄漏
             webView.loadDataWithBaseURL(null, "", "text/html", "utf-8", null);
             webView.clearHistory();
-            ((ViewGroup) webView.getParent()).removeView(webView);
+            webView.clearCache(true);
+            
+            // 安全移除 View 树中的引用
+            if (webView.getParent() != null) {
+                ((ViewGroup) webView.getParent()).removeView(webView);
+            }
+            
+            webView.removeAllViews();
             webView.destroy();
             webView = null;
         }
@@ -235,7 +247,7 @@ public class MainActivity extends AppCompatActivity {
         });
 
         findViewById(R.id.btn_home).setOnClickListener(v -> {
-            webView.loadUrl("http://localhost/index.html");
+            webView.loadUrl("https://localhost/index.html");
         });
 
         findViewById(R.id.btn_forward).setOnClickListener(v -> {
@@ -280,24 +292,31 @@ public class MainActivity extends AppCompatActivity {
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
-        settings.setAllowFileAccess(true);
-        settings.setAllowContentAccess(true);
+        settings.setAllowFileAccess(false);
+        settings.setAllowContentAccess(false);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
-            settings.setAllowFileAccessFromFileURLs(true);
-            settings.setAllowUniversalAccessFromFileURLs(true);
+            settings.setAllowFileAccessFromFileURLs(false);
+            settings.setAllowUniversalAccessFromFileURLs(false);
         }
         settings.setJavaScriptCanOpenWindowsAutomatically(true);
         settings.setSupportMultipleWindows(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+            settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         }
         
         // 设置缓存模式
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
         
+        // WebViewClient configuration
         webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageStarted(WebView view, String url, Bitmap favicon) {
+                super.onPageStarted(view, url, favicon);
+                showToolbar();
+            }
+
             /**
              * 拦截并处理 WebView 发起的资源请求，支持从 assets 中加载本地资源。
              */
@@ -439,8 +458,9 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onPermissionRequest(android.webkit.PermissionRequest request) {
                 logInfo("WebView onPermissionRequest: " + Arrays.toString(request.getResources()), false);
-                // 默认授权
+                // 仅对信任的本地域名授权，或添加用户确认逻辑
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    // 安全建议：在生产环境中应检查 request.getOrigin() 是否为 localhost
                     request.grant(request.getResources());
                 }
             }
@@ -490,22 +510,65 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // Auto-hide toolbar logic
+        // Touch gesture handling for both scrollable and non-scrollable pages
+        webView.setOnTouchListener(new View.OnTouchListener() {
+            private float startY;
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                switch (event.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+                        startY = event.getY();
+                        break;
+                    case MotionEvent.ACTION_MOVE:
+                        float deltaY = event.getY() - startY;
+                        // Using a threshold to detect intentional gestures
+                        if (Math.abs(deltaY) > 50) {
+                            if (deltaY < 0) {
+                                // Swipe up (finger moves up) -> Hide toolbar
+                                hideToolbar();
+                            } else {
+                                // Swipe down (finger moves down) -> Show toolbar
+                                showToolbar();
+                            }
+                            startY = event.getY();
+                        }
+                        break;
+                }
+                return false; // Don't consume the event, let WebView handle it
+            }
+        });
+
+        // Keep scroll listener for precise behavior on long pages
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             webView.setOnScrollChangeListener((v, scrollX, scrollY, oldScrollX, oldScrollY) -> {
                 if (scrollY > oldScrollY && scrollY > 100) {
-                    // Scrolling down
-                    if (bottomToolbar.getVisibility() == View.VISIBLE) {
-                        bottomToolbar.animate().translationY(bottomToolbar.getHeight()).setDuration(200).withEndAction(() -> bottomToolbar.setVisibility(View.GONE));
-                    }
+                    hideToolbar();
                 } else if (scrollY < oldScrollY) {
-                    // Scrolling up
-                    if (bottomToolbar.getVisibility() != View.VISIBLE) {
-                        bottomToolbar.setVisibility(View.VISIBLE);
-                        bottomToolbar.animate().translationY(0).setDuration(200);
-                    }
+                    showToolbar();
                 }
             });
+        }
+    }
+
+    /**
+     * 显示底部工具栏
+     */
+    private void showToolbar() {
+        if (bottomToolbar != null && bottomToolbar.getVisibility() != View.VISIBLE) {
+            bottomToolbar.setVisibility(View.VISIBLE);
+            bottomToolbar.animate().translationY(0).setDuration(200);
+        }
+    }
+
+    /**
+     * 隐藏底部工具栏
+     */
+    private void hideToolbar() {
+        if (bottomToolbar != null && bottomToolbar.getVisibility() == View.VISIBLE) {
+            bottomToolbar.animate()
+                    .translationY(bottomToolbar.getHeight())
+                    .setDuration(200)
+                    .withEndAction(() -> bottomToolbar.setVisibility(View.GONE));
         }
     }
 
@@ -522,9 +585,10 @@ public class MainActivity extends AppCompatActivity {
      * @param isVerbose 是否为冗余日志（受开关控制）
      */
     private void logInfo(String message, boolean isVerbose) {
-        if (!isVerbose || isDetailedLogEnabled) {
+        if (isDetailedLogEnabled) {
             String timestamp = new java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.getDefault()).format(new java.util.Date());
-            String entry = "[" + timestamp + "] [INFO] " + message + "\n\n";
+            String level = isVerbose ? "[INFO]" : "[CORE]";
+            String entry = "[" + timestamp + "] " + level + " " + message + "\n\n";
             errorLogs.append(entry);
             // 核心逻辑使用 Log.e 确保在 adb logcat 中不被丢失
             if (!isVerbose) {
@@ -694,7 +758,7 @@ public class MainActivity extends AppCompatActivity {
                     String mimeType = getMimeType(assetPath);
                     return new WebResourceResponse(mimeType, "UTF-8", stream);
                 } catch (IOException e) {
-                    Log.e("WebViewDebug", "File not found: " + assetPath);
+                    ((MainActivity)context).logError("Asset File not found: " + assetPath);
                     String errorHtml = "<html><body><h2 style='color:red;'>404 Not Found</h2><p>" + assetPath + "</p></body></html>";
                     return new WebResourceResponse("text/html", "UTF-8", 404, "Not Found", null, new ByteArrayInputStream(errorHtml.getBytes()));
                 }
