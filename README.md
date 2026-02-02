@@ -11,8 +11,9 @@
 - **Service Worker 支持**: 拦截 Service Worker 请求，确保 PWA 应用的离线能力。
 - **文件选择与目录授权**: 
   - 支持标准文件选取 (`<input type="file">`)。
-  - **标准 Web API 支持**: 在 WebView 132+ 环境下，原生支持 `window.showOpenFilePicker` 和 `window.showSaveFilePicker`。
-  - **目录授权**: 支持通过 `<input type="file" accept=".directory">` 或 `window.showDirectoryPicker` (需适配) 触发目录选择。
+  - **标准 Web API 支持**: 目前原生支持 `window.showOpenFilePicker`。
+  - **注意**: `window.showSaveFilePicker` 和 `window.showDirectoryPicker` 在当前 Android WebView 版本下可能无法正常触发拦截（预计需要 Android 16 / WebView 142+），建议暂通过 `<input type="file" accept=".directory">` 触发目录选择。
+  - **目录授权**: 支持通过 `<input type="file" accept=".directory">` 触发文件夹选择，Java 层会自动锁定并持久化该目录的访问权限。
   - **持久化**: 授权后的目录权限在应用重启后依然有效，Java 层会静默保存授权记录。
 - **错误日志**: 内置运行时错误日志捕获与显示工具栏，方便调试。
 
@@ -35,14 +36,30 @@
 推荐使用标准的 **Origin Private File System (OPFS)** API 进行网页私有数据的读写，无需额外权限。
 
 ## 如何构建
-项目完全支持云端自动化构建，无需本地配置 Android 环境：
-1. **GitHub Actions**: 每次推送代码到 `main` 分支，GitHub Actions 会自动执行构建脚本。
+
+项目支持云端自动化构建和本地环境构建。
+
+### 1. 本地构建要求
+- **JDK**: 17 (推荐使用 Temurin)
+- **Android SDK**: API 34 (Build Tools 34.0.0)
+- **Gradle**: 8.2 (项目已内置 Gradle Wrapper)
+- **Web 资源**: 构建前需手动将网页前端资源解压至 `app/src/main/assets/` 目录中。
+
+### 2. 本地构建步骤
+```bash
+# 生成/同步 Gradle Wrapper
+./gradlew wrapper --gradle-version 8.2
+
+# 执行 Release 构建
+./gradlew assembleRelease
+```
+
+### 3. GitHub Actions 自动化构建
+每次推送代码到 `main` 或 `master` 分支，GitHub Actions 会自动执行以下流程：
+1. **自动下载资源**: 从仓库的 `AssetStorage` Release 中下载最新的 `dist.zip` 并部署到 `assets`。
 2. **签署与发布**: 
-   - 构建产生的 APK 会自动使用预设的 KeyStore 进行签署。
-   - 签署后的 APK 会发布在项目的 [Releases](../../releases) 页面。
-3. **本地构建**: 
-   - 如果您有本地环境，使用 `./gradlew assembleRelease` 即可。
-   - 要求 JDK 17 及 Android SDK 34。
+   - 使用 GitHub Secrets (`SIGNING_KEY`, `ALIAS`, `KEY_STORE_PASSWORD`, `KEY_PASSWORD`) 自动签署 APK。
+   - 签署后的 APK 会自动发布在项目的 [Releases](../../releases) 页面。
 
 ## 使用说明
 1. 安装 APK 后，打开应用即进入本地网页。
