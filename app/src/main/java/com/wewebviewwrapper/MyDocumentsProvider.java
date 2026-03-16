@@ -46,7 +46,8 @@ public class MyDocumentsProvider extends DocumentsProvider {
         row.add(DocumentsContract.Root.COLUMN_ROOT_ID, ROOT_ID);
         row.add(DocumentsContract.Root.COLUMN_FLAGS,
                 DocumentsContract.Root.FLAG_SUPPORTS_CREATE |
-                DocumentsContract.Root.FLAG_SUPPORTS_IS_CHILD);
+                DocumentsContract.Root.FLAG_SUPPORTS_IS_CHILD |
+                DocumentsContract.Root.FLAG_LOCAL_ONLY);
         row.add(DocumentsContract.Root.COLUMN_TITLE, "WeWebViewWrapper");
         row.add(DocumentsContract.Root.COLUMN_DOCUMENT_ID, getDocIdForFile(Objects.requireNonNull(getContext()).getFilesDir()));
         row.add(DocumentsContract.Root.COLUMN_SUMMARY, "App's private storage");
