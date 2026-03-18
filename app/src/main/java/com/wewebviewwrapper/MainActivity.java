@@ -208,7 +208,7 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         
-        webView.loadUrl("https://localhost/index.html");
+        webView.loadUrl("https://localhost/");
     }
 
     @Override
@@ -259,7 +259,7 @@ public class MainActivity extends AppCompatActivity {
         });
 
         findViewById(R.id.btn_home).setOnClickListener(v -> {
-            webView.loadUrl("https://localhost/index.html");
+            webView.loadUrl("https://localhost/");
         });
 
         findViewById(R.id.btn_forward).setOnClickListener(v -> {
